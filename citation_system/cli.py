@@ -292,6 +292,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--volume", dest="volume_id", required=True)
     p.add_argument("--page", dest="page_id", required=True)
     p.set_defaults(func=cmd_referrers)
+
+    from .rehearsal.cli import add_rehearsal_subparsers
+
+    add_rehearsal_subparsers(sub)
     return parser
 
 

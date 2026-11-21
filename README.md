@@ -142,3 +142,83 @@ work/              运行的 SQLite 数据库
 ## 不做什么
 
 不 OCR、不做自然语言定位、不做版式编辑；不解析 PDF 图像；不读取图片内容。
+
+---
+
+# 离线排练排页（rehearsal paging）
+
+在稳定页身份与 PINNED/RANGE 引用仓之上，解决"读谱台能否在休止拍之间翻到
+下一段"。代码在 `citation_system/rehearsal/`，纯计算部分只吃内存快照、不
+打开 SQLite，因此一场**已封存**的排练可在断网台上原样复核。
+
+```bash
+# 在线：建库 → 引用 → 求解并封存离线包
+python3 -m citation_system init --db work/rh/cat.db \
+    --pages materials/rehearsal/pages.json --force
+python3 -m citation_system add-references --db work/rh/cat.db \
+    --references materials/rehearsal/references.jsonl
+python3 -m citation_system rehearse --db work/rh/cat.db \
+    --plan materials/rehearsal/plan_sentence.json --seal exports/rh/bundle
+
+# 离线：断网台只凭封存包复核 / 重放（不碰数据库）
+python3 -m citation_system verify-bundle --bundle exports/rh/bundle
+python3 -m citation_system rehearse-offline --bundle exports/rh/bundle
+
+python3 scripts/demo_rehearsal.py        # 题面全部例子，逐步打印
+python3 scripts/benchmark_rehearsal.py   # 600 拍 × 4 声部规模基准
+```
+
+## 对开与台型（`rehearsal/model.py`）
+
+- **对开（opening，一个"面"）** 是一拍内唯一能同显的物理单元，面号从 1 起。
+  目录修订去掉停用页后，把**在用页**按在用次序成对放入对开；停用页不占面，
+  但稳定身份 `(volume_id, page_id)` 与物理 `seq` 仍保留在快照里。
+- 台型 `paired`（默认）：第 1、2 页同面，第 3、4 页同面，……末面可单页。
+- 台型 `leading_blank`：卷首先放一个显示空位，第 1 页独占首面，之后成对。
+- 一切运算以稳定身份为准，**不凭印刷页码**：`body/3` 与 `appendix/3` 是两个
+  不同页，按 `(section,label)` 解析必须在用页里恰好命中一个，否则报
+  `resolution_not_found` / `resolution_ambiguous`（同号附页不会被排错）。
+- 一场排练固定四要素：卷、目录修订、台型、引用修订。修订由显式的在用页
+  身份次序声明；同一份卷快照可挂多份修订（如 `old`/`new`），旧版结论保留。
+
+## 引用展开（`rehearsal/expansion.py`）
+
+把一拍指定的固定引用或范围，展成该版**实际须看见的页、对开和来源历**：
+
+- 状态码：`ok` / `pending`（PINNED 含停用成员、RANGE 端点停用或先后反转、
+  登记待核）/ `cross_volume`（属于另一卷）/ `not_co_displayable`（一拍多份
+  引用落不到同一对开）/ `resolution_not_found` / `resolution_ambiguous`。
+- RANGE 取两端间当前在用页；端点反转时保留原来源顺序，**不交换、不猜测**。
+- 每页带 provenance（`pinned_member`/`range_start`/`range_end`/
+  `range_interior`/`inline`），可追溯到具体摘录。
+- 一拍可列多份引用，必须同显在**同一对开**；否则整拍 `not_co_displayable`
+  并附各页对开号。
+- 展开结果按 `(卷, 目录修订, 引用)` 缓存：多声部、多套休止安排共享同一份
+  展开，目录一改或台型一改缓存自然失效重算。
+
+## 求解（`rehearsal/solver.py`）
+
+- 声部有独立**起始对开**、每间隙的**正反翻页速率**（一次间隙至多向前/向后
+  移动给定整数面）与可翻间隙表；`(0,0)` 即禁翻，只能保持原面。
+- **空拍**不要求显示内容、可停任意面，但仍受间隙速率约束（可趁空拍提前翻）。
+- 逐拍动态规划求**最少实际翻动距离**（各间隙面号差绝对值之和）与逐拍面号；
+  同成本取面号较小的确定排法（题目允许任一合法排法）。
+- 无解时指出**最早无法满足的拍**、原因、当时可达面与要求面。
+- **整句替代谱本**：一句连续数拍登记两本批准谱本，同句必须从头到尾用同一本，
+  只在句间改本、台面承接上一句。某本遇待核/不能同显可检查另一整本；两本都
+  死时给出"不晚于哪一拍所有选择均已失效"，且不会拼甲首拍与乙末拍。
+- 只改台型或目录修订，原本不能演的选本可能变为可演（演示脚本有实例）。
+
+## 封存与断网复核（`rehearsal/seal.py`）
+
+封存包目录（`rehearsal-bundle/1`）自包含：快照页（含停用页与物理 seq）、
+目录修订与台型、引用登记、整场排练输入与求解结果，外加 `manifest.sha256`。
+复核端不需要 SQLite/网络：重建内存快照后重跑同一求解器，逐字段比对封存
+结果并校验哈希；任何篡改都会使哈希与重放同时失败。
+
+## 规模
+
+`scripts/benchmark_rehearsal.py`（600 拍、4 声部、40 面、约 70 个不同引用）
+实测：整场求解约 4–15 ms、封存约 16 ms、断网复核（哈希+重放）约 6–16 ms。
+展开按版共享，声部数增长几乎不增加展开成本。
+

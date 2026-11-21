@@ -1,0 +1,80 @@
+{
+  "format": "rehearsal-plan/1",
+  "rehearsal_id": "sentence-demo",
+  "volume_id": "V1",
+  "revision_id": "default",
+  "layouts": [
+    {
+      "revision_id": "default",
+      "stand_type": "paired"
+    }
+  ],
+  "beats": [
+    {
+      "beat": 1,
+      "refs": [
+        {
+          "citation_id": "C1"
+        }
+      ]
+    },
+    {
+      "beat": 2,
+      "sentence_id": "S1",
+      "alternatives": {
+        "A": {
+          "refs": [
+            {
+              "citation_id": "CA2"
+            }
+          ]
+        },
+        "B": {
+          "refs": [
+            {
+              "citation_id": "CB2"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "beat": 3,
+      "sentence_id": "S1",
+      "alternatives": {
+        "A": {
+          "refs": [
+            {
+              "citation_id": "CA3"
+            }
+          ]
+        },
+        "B": {
+          "refs": [
+            {
+              "citation_id": "CB3"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "parts": [
+    {
+      "part_id": "vn",
+      "initial_opening": 1,
+      "gaps": [
+        {
+          "after_beat": 1,
+          "forward": 1,
+          "backward": 1
+        },
+        {
+          "after_beat": 2,
+          "forward": 1,
+          "backward": 1
+        }
+      ]
+    }
+  ]
+}
